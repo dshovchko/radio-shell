@@ -1,0 +1,198 @@
+#!/bin/bash
+
+BINDIR="$( cd "$(dirname "$0")" ; pwd -P )"
+MAINDIR=$(realpath $BINDIR/..)
+ETCDIR=$MAINDIR/etc
+ICONDIR=$MAINDIR/share/icons
+CFG_SINGLE=$ETCDIR/SingleChannel.cfg
+CFG_ROKS=$ETCDIR/RadioROKS.cfg
+CFG_SOMAFM=$ETCDIR/SomaFM.cfg
+
+do_log () {
+  LOGF=~/log/radio/$1
+  while true
+  do
+    read -d ';'
+    if [[ ${REPLY} =~ " finished." ]]; then
+      # on getting
+      #[0:02] Decoding of lush-128.mp3 finished.
+      echo > /tmp/streamurl; echo > /tmp/streamtitle; echo "exited..."
+      break;
+    fi
+    if [ ! -z "$REPLY" ]; then
+
+      if [[ -z $ICY_NAME ]]; then
+        ICY_NAME=$(echo "$REPLY"| grep ICY-NAME|sed s/ICY-NAME:\//g|sed s/\'$//g);
+        if [[ -n $ICY_NAME ]]; then echo; echo $ICY_NAME; fi
+      fi
+      if [[ -z $ICY_URL ]]; then
+        ICY_URL=$(echo "$REPLY"| grep ICY-URL|sed s/ICY-URL:\//g|sed s/\'$//g);
+        if [[ -n $ICY_URL ]]; then echo $ICY_URL; echo; fi
+      fi
+
+      TRACK=$(echo "$REPLY"| grep ICY-META|sed s/ICY-META:\ StreamTitle=\'//g|sed s/\'$//g);
+      if [[ -n $TRACK ]]; then
+        (notify-send -i $2 "$TRACK" && TIM=`date +%H:%M` && DAT=`date +%Y%m%d` && echo $TRACK && echo $TRACK > /tmp/streamtitle && echo "$TIM $TRACK" >> "$LOGF-$DAT.log")
+      fi
+      sleep 1;
+    fi
+  done
+}
+
+play () {
+  echo $1 > /tmp/streamurl
+  echo $2
+  mpg123 -C "$1" &> /dev/stdout | do_log "$3" "$4"
+}
+
+playSingleChannelRadio () {
+  if [[ -n `sed -n -e "/^$1|/p" $CFG_SINGLE` ]]; then
+    STREAM=`sed -n -e "/^$1|/p" $CFG_SINGLE | awk -F '|' '{print $2}'`
+    NAME=`sed -n -e "/^$1|/p" $CFG_SINGLE | awk -F '|' '{print $3}'`
+    ICON=`sed -n -e "/^$1|/p" $CFG_SINGLE | awk -F '|' '{print $4}'`
+
+    play "$STREAM" "$NAME" "$1/online" "$ICONDIR/$ICON"
+  else
+    error
+  fi
+}
+
+playRR () {
+  ICON=$ICONDIR/RadioROKS.svg
+  STREAM=`sed -n -e "/^$1|/p" $CFG_ROKS | awk -F '|' '{print $2}'`
+  NAME=`sed -n -e "/^$1|/p" $CFG_ROKS | awk -F '|' '{print $3}'`
+
+  play "$STREAM" "$NAME" "Radio ROKS/Radio ROKS $1" "$ICON"
+}
+
+playSomaFM () {
+  CHANNEL=`sed -n -e "/^$1|/p" $CFG_SOMAFM | awk -F '|' '{print $2}'`
+  BRATE=`sed -n -e "/^$1|/p" $CFG_SOMAFM | awk -F '|' '{print $3}'`
+  NAME=`sed -n -e "/^$1|/p" $CFG_SOMAFM | awk -F '|' '{print $4}'`
+
+  ICON="$ICONDIR/soma.fm/${CHANNEL}-400.jpg"
+  CHANNELN=$(( ( RANDOM % 4 )  + 1 ))
+  STREAM="http://ice${CHANNELN}.somafm.com/${CHANNEL}-${BRATE}-mp3"
+
+  play "$STREAM" "$NAME" "soma.fm/$1" "$ICON"
+}
+
+echoRadioChannel () {
+  cat $1 | sed s/^/$2\|/g | awk -F '|' '{print $1"|"$2}'
+}
+
+do_roks () {
+  if [[ -z $1 ]]; then
+    playRR "{empty}"     # default option
+  else
+    case $1 in
+      ukr|new|hh|ballads|{empty})
+        playRR $1
+        ;;
+      *)
+        error
+        ;;
+    esac
+  fi
+}
+
+do_somafm () {
+  if [[ -z $1 ]]; then
+    playSomaFM $(shuf -n 1 $CFG_SOMAFM | awk -F '|' '{print $1}')   # default option - random mode
+  else
+    if [[ -n `sed -n -e "/^$1|/p" $CFG_SOMAFM` ]]; then
+      playSomaFM $1
+    else
+      error
+    fi
+  fi
+}
+
+do_random () {
+  OUT=$(shuf -e -n 1 $(echoRadioChannel $CFG_SOMAFM "somafm" && echoRadioChannel $CFG_ROKS "roks" && echoRadioChannel $CFG_SINGLE "single"))
+  do_main $(awk -F '|' '{print $1}' <<< "$OUT") $(awk -F '|' '{print $2}' <<< "$OUT")
+}
+
+check_config () {
+  if [[ -n `sed -n '/^$/=' $2` ]]; then
+    echo "There is an empty lines in config file $2"
+    exit
+  fi
+  if [[ -n `sed -e $1 $2` ]]; then
+    echo "There is an error in config file $2"
+    exit
+  fi
+}
+
+check_configs () {
+  check_config "/^[^|]*|[^|]*|[^|]*|[^|]*$/d" $CFG_SINGLE
+  check_config "/^[^|]*|[^|]*|[^|]*$/d" $CFG_ROKS
+  check_config "/^[^|]*|[^|]*|[^|]*|[^|]*$/d" $CFG_SOMAFM
+}
+
+check_log_dirs () {
+  [ -d ~/log/radio/soma.fm ] || mkdir -p ~/log/radio/soma.fm
+  [ -d ~/log/radio/Radio\ ROKS ] || mkdir -p ~/log/radio/Radio\ ROKS
+  for DIR in $(cat $CFG_SINGLE | awk -F '|' '{print $1}')
+  do
+    [ -d ~/log/radio/$DIR ] || mkdir -p ~/log/radio/$DIR
+  done
+}
+
+help () {
+  echo "Shell for radio"
+  echo "usage: radio [name] [channel]"
+  echo
+  echo "list of supported radios and channels:"
+  echo -e "radio\tchannel\t\tdescription"
+  echo
+  cat $CFG_SINGLE | awk -F '|' '{print $1"      \t\t"$3}'
+  echo -e "roks\t\t\tRadio ROKS (www.radioroks.ua)"
+  cat $CFG_ROKS | awk -F '|' '{print "\t"$1"      \t"$3}'
+  echo -e "somafm\t\t\tSomaFM (somafm.com)"
+  cat $CFG_SOMAFM | awk -F '|' '{print "\t"$1"    \t"$4}'
+  echo -e "\t{empty}\t\trandom channel selection"
+  echo -e "~\t\t\trandom radio and channel selection"
+  echo
+  echo "terminal control keys:"
+  echo
+  echo -e " [+]\t\tvolume up"
+  echo -e " [-]\t\tvolume down"
+  echo -e " [s] or [ ]\tinterrupt/restart playback (i.e. 'pause')"
+  echo -e " [q]\t\tquit"
+  echo
+}
+
+error () {
+  echo "You made some mistake in program usage... let me briefly remind you:"
+  echo
+  help
+}
+
+do_main () {
+  if [[ -z $1 ]]; then
+    help      # without options
+  else
+    case $1 in
+      ~)
+        do_random
+        ;;
+      roks)
+        do_roks $2
+        ;;
+      somafm)
+        do_somafm $2
+        ;;
+      single)
+        playSingleChannelRadio $2
+        ;;
+      *)
+        playSingleChannelRadio $1
+        ;;
+    esac
+  fi  
+}
+
+check_configs
+check_log_dirs
+do_main $1 $2
