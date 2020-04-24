@@ -4,9 +4,14 @@ BINDIR="$( cd "$(dirname "$0")" ; pwd -P )"
 MAINDIR=$(realpath $BINDIR/..)
 ETCDIR=$MAINDIR/etc
 ICONDIR=$MAINDIR/share/icons
+CFG_FILE=$ETCDIR/radio.cfg
 CFG_SINGLE=$ETCDIR/SingleChannel.cfg
 CFG_ROKS=$ETCDIR/RadioROKS.cfg
 CFG_SOMAFM=$ETCDIR/SomaFM.cfg
+
+# filtered configs
+CFG=`sed '/^[[:blank:]]*#/d;s/#.*//' $CFG_FILE`
+CFG_ROOT=`sed '/^[[:blank:]]*#/d;s/#.*//;/^{root}/d' $CFG_FILE`
 
 do_log () {
   LOGF=~/log/radio/$1
@@ -45,73 +50,69 @@ play () {
   mpg123 -C "$1" &> /dev/stdout | do_log "$3" "$4"
 }
 
-playSingleChannelRadio () {
-  if [[ -n `sed -n -e "/^$1|/p" $CFG_SINGLE` ]]; then
-    STREAM=`sed -n -e "/^$1|/p" $CFG_SINGLE | awk -F '|' '{print $2}'`
-    NAME=`sed -n -e "/^$1|/p" $CFG_SINGLE | awk -F '|' '{print $3}'`
-    ICON=`sed -n -e "/^$1|/p" $CFG_SINGLE | awk -F '|' '{print $4}'`
-
-    play "$STREAM" "$NAME" "$1/online" "$ICONDIR/$ICON"
-  else
-    error
-  fi
-}
-
-playRR () {
-  ICON=$ICONDIR/RadioROKS.svg
-  STREAM=`sed -n -e "/^$1|/p" $CFG_ROKS | awk -F '|' '{print $2}'`
-  NAME=`sed -n -e "/^$1|/p" $CFG_ROKS | awk -F '|' '{print $3}'`
-
-  play "$STREAM" "$NAME" "Radio ROKS/Radio ROKS $1" "$ICON"
-}
-
-playSomaFM () {
-  CHANNEL=`sed -n -e "/^$1|/p" $CFG_SOMAFM | awk -F '|' '{print $2}'`
-  BRATE=`sed -n -e "/^$1|/p" $CFG_SOMAFM | awk -F '|' '{print $3}'`
-  NAME=`sed -n -e "/^$1|/p" $CFG_SOMAFM | awk -F '|' '{print $4}'`
-
-  ICON="$ICONDIR/soma.fm/${CHANNEL}-400.jpg"
-  CHANNELN=$(( ( RANDOM % 4 )  + 1 ))
-  STREAM="http://ice${CHANNELN}.somafm.com/${CHANNEL}-${BRATE}-mp3"
-
-  play "$STREAM" "$NAME" "soma.fm/$1" "$ICON"
-}
-
 echoRadioChannel () {
   cat $1 | sed s/^/$2\|/g | awk -F '|' '{print $1"|"$2}'
 }
 
-do_roks () {
-  if [[ -z $1 ]]; then
-    playRR "{empty}"     # default option
-  else
-    case $1 in
-      ukr|new|hh|ballads|{empty})
-        playRR $1
-        ;;
-      *)
-        error
-        ;;
-    esac
-  fi
-}
+play_channel () {
+  RGRP=`echo "$1" | cut -d "|" -f 1`
+  RCNL=`echo "$1" | cut -d "|" -f 2`
+  STREAM=`echo "$1" | cut -d "|" -f 3`
+  NAME=`echo "$1" | cut -d "|" -f 4`
+  ICON=`echo "$1" | cut -d "|" -f 5`
 
-do_somafm () {
-  if [[ -z $1 ]]; then
-    playSomaFM $(shuf -n 1 $CFG_SOMAFM | awk -F '|' '{print $1}')   # default option - random mode
+  if [ "$RGRP" = "{root}" ]; then
+    LOGNAME="$RCNL/online"
   else
-    if [[ -n `sed -n -e "/^$1|/p" $CFG_SOMAFM` ]]; then
-      playSomaFM $1
-    else
-      error
-    fi
+    LOGNAME="$RGRP/$RCNL/online"
   fi
+
+  if [[ $STREAM =~ ^\{somafm! ]]; then
+    STR=`echo "$STREAM" | sed 's/{//;s/}//;'`
+    CHANNEL=`echo "$STR" | cut -d "!" -f 2`
+    BITRATE=`echo "$STR" | cut -d "!" -f 3`
+    CHANNELN=$(( ( RANDOM % 4 )  + 1 ))
+    STREAM="http://ice${CHANNELN}.somafm.com/${CHANNEL}-${BITRATE}-mp3"
+  fi
+
+  play "$STREAM" "$NAME" "$1/online" "$ICONDIR/$ICON"
 }
 
 do_random () {
-  OUT=$(shuf -e -n 1 $(echoRadioChannel $CFG_SOMAFM "somafm" && echoRadioChannel $CFG_ROKS "roks" && echoRadioChannel $CFG_SINGLE "single"))
-  do_main $(awk -F '|' '{print $1}' <<< "$OUT") $(awk -F '|' '{print $2}' <<< "$OUT")
+  CHANNEL=`echo "$CFG" | sed "/|{group}|/d" | shuf -n 1`
+  play_channel "$CHANNEL"
 }
+
+do_radio_group_channel () {
+  CHANNEL=`echo "$CFG" | sed -n "/^$1|$2|/p"`
+  if [[ -z $CHANNEL ]]; then
+    error
+  else
+    play_channel "$CHANNEL"
+  fi
+}
+
+do_radio () {
+  # check how much args received
+  if [[ -z $2 ]]; then
+    # try to play root channel
+    CHANNEL=`echo "$CFG" | sed -n "/^{root}|$1|/p"`
+    if [[ -z $CHANNEL ]]; then
+      # there isn't a root channel
+      # try to play group with empty channel
+      CHANNEL=`echo "$CFG" | sed -n "/^$1|{empty}|/p"`
+      if [[ -z $CHANNEL ]]; then
+        #there isn't a group with empty channel
+        error
+      fi
+    fi
+    play_channel "$CHANNEL"
+  else
+    # play radio channel
+    do_radio_group_channel $1 $2
+  fi
+}
+
 
 check_config () {
   if [[ -n `sed -n '/^$/=' $2` ]]; then
@@ -139,18 +140,35 @@ check_log_dirs () {
   done
 }
 
-help () {
+print_single () {
+  cat $CFG_SINGLE  ''
+}
+
+help_single() {
+  echo "$CFG" | sed -n '/^{root}/p' | awk -F '|' '{print $2"      \t\t"$4}'
+}
+
+help_group() {
+  echo "$CFG" | sed -n "/^$1|{group}/p" | awk -F '|' '{print $1"      \t\t"$4}'
+  echo "$CFG" | sed -n "/^$1|{group}/d;/^$1/p" | awk -F '|' '{print "\t"$2"      \t"$4}'
+}
+
+help_groups() {
+  for GRP in $(echo "$CFG_ROOT" | awk -F '|' '{print $1}' | uniq)
+  do
+    help_group $GRP
+  done
+}
+
+do_help () {
   echo "Shell for radio"
   echo "usage: radio [name] [channel]"
   echo
   echo "list of supported radios and channels:"
   echo -e "radio\tchannel\t\tdescription"
   echo
-  cat $CFG_SINGLE | awk -F '|' '{print $1"      \t\t"$3}'
-  echo -e "roks\t\t\tRadio ROKS (www.radioroks.ua)"
-  cat $CFG_ROKS | awk -F '|' '{print "\t"$1"      \t"$3}'
-  echo -e "somafm\t\t\tSomaFM (somafm.com)"
-  cat $CFG_SOMAFM | awk -F '|' '{print "\t"$1"    \t"$4}'
+  help_single
+  help_groups
   echo -e "\t{empty}\t\trandom channel selection"
   echo -e "~\t\t\trandom radio and channel selection"
   echo
@@ -171,26 +189,20 @@ error () {
 
 do_main () {
   if [[ -z $1 ]]; then
-    help      # without options
+    do_help      # without options
   else
     case $1 in
       ~)
         do_random
         ;;
-      roks)
-        do_roks $2
-        ;;
-      somafm)
-        do_somafm $2
-        ;;
-      single)
-        playSingleChannelRadio $2
+      help)
+        do_help
         ;;
       *)
-        playSingleChannelRadio $1
+        do_radio $1 $2
         ;;
     esac
-  fi  
+  fi
 }
 
 check_configs
