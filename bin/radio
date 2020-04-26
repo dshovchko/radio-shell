@@ -3,18 +3,17 @@
 BINDIR="$( cd "$(dirname "$0")" ; pwd -P )"
 MAINDIR=$(realpath $BINDIR/..)
 ETCDIR=$MAINDIR/etc
+LOGDIR=~/log/radio
 ICONDIR=$MAINDIR/share/icons
 CFG_FILE=$ETCDIR/radio.cfg
-CFG_SINGLE=$ETCDIR/SingleChannel.cfg
-CFG_ROKS=$ETCDIR/RadioROKS.cfg
-CFG_SOMAFM=$ETCDIR/SomaFM.cfg
 
 # filtered configs
-CFG=`sed '/^[[:blank:]]*#/d;s/#.*//' $CFG_FILE`
-CFG_ROOT=`sed '/^[[:blank:]]*#/d;s/#.*//;/^{root}/d' $CFG_FILE`
+CFG=`sed '/^[[:blank:]]*#/d;s/#.*//;/^$/d' $CFG_FILE`
+CFG_ROOT=`sed '/^[[:blank:]]*#/d;s/#.*//;/^$/d;/^{root}/!d' $CFG_FILE`
+CFG_GROUP=`sed '/^[[:blank:]]*#/d;s/#.*//;/^$/d;/^{root}/d' $CFG_FILE`
 
 do_log () {
-  LOGF=~/log/radio/$1
+  LOGF=$1
   while true
   do
     read -d ';'
@@ -47,26 +46,19 @@ do_log () {
 play () {
   echo $1 > /tmp/streamurl
   echo $2
-  mpg123 -C "$1" &> /dev/stdout | do_log "$3" "$4"
+  mpg123 -C "$1" &> /dev/stdout | do_log "$LOGDIR/$3" "$4"
 }
 
-echoRadioChannel () {
-  cat $1 | sed s/^/$2\|/g | awk -F '|' '{print $1"|"$2}'
+get_group () {
+  echo "$1" | cut -d "|" -f 1
 }
 
-play_channel () {
-  RGRP=`echo "$1" | cut -d "|" -f 1`
-  RCNL=`echo "$1" | cut -d "|" -f 2`
+get_channel () {
+  echo "$1" | cut -d "|" -f 2
+}
+
+get_stream () {
   STREAM=`echo "$1" | cut -d "|" -f 3`
-  NAME=`echo "$1" | cut -d "|" -f 4`
-  ICON=`echo "$1" | cut -d "|" -f 5`
-
-  if [ "$RGRP" = "{root}" ]; then
-    LOGNAME="$RCNL/online"
-  else
-    LOGNAME="$RGRP/$RCNL/online"
-  fi
-
   if [[ $STREAM =~ ^\{somafm! ]]; then
     STR=`echo "$STREAM" | sed 's/{//;s/}//;'`
     CHANNEL=`echo "$STR" | cut -d "!" -f 2`
@@ -74,11 +66,53 @@ play_channel () {
     CHANNELN=$(( ( RANDOM % 4 )  + 1 ))
     STREAM="http://ice${CHANNELN}.somafm.com/${CHANNEL}-${BITRATE}-mp3"
   fi
+  echo "$STREAM"
+  }
 
-  play "$STREAM" "$NAME" "$1/online" "$ICONDIR/$ICON"
+get_name () {
+  echo "$1" | cut -d "|" -f 4
+}
+
+get_icon () {
+  echo "$1" | cut -d "|" -f 5
+}
+
+get_log_dir () {
+  if [ "$1" = "{root}" ]; then
+    LDIR="$2"
+  else
+    if [ "$2" = "{empty}" ]; then
+      LDIR="$1"
+    else
+      LDIR="$1/$2"
+    fi
+  fi
+  echo "$LDIR"
+}
+
+get_log_file_name () {
+  echo "$(get_log_dir "$1" "$2")/online"
+}
+
+play_channel () {
+  RGRP=$(get_group "$1")
+  RCNL=$(get_channel "$1")
+  LOGFILENAME=$(get_log_file_name "$RGRP" "$RCNL")
+  STREAM=$(get_stream "$1")
+  NAME=$(get_name "$1")
+  ICON=$(get_icon "$1")
+
+  play "$STREAM" "$NAME" "$LOGFILENAME" "$ICONDIR/$ICON"
+}
+
+do_before () {
+  config_check
+  check_log_dirs
+  remove_old_logs 60
 }
 
 do_random () {
+  do_before
   CHANNEL=`echo "$CFG" | sed "/|{group}|/d" | shuf -n 1`
   play_channel "$CHANNEL"
 }
@@ -93,6 +127,7 @@ do_radio_group_channel () {
 }
 
 do_radio () {
+  do_before
   # check how much args received
   if [[ -z $2 ]]; then
     # try to play root channel
@@ -113,78 +148,120 @@ do_radio () {
   fi
 }
 
-
-check_config () {
-  if [[ -n `sed -n '/^$/=' $2` ]]; then
-    echo "There is an empty lines in config file $2"
+config_check () {
+  if [[ -n `echo "$CFG" | sed -n '/^$/='` ]]; then
+    echo -e "\nThere is an empty lines in config file\n"
     exit
   fi
-  if [[ -n `sed -e $1 $2` ]]; then
-    echo "There is an error in config file $2"
+
+  if [[ -n `echo "$CFG" | sed -e '/^[^|]*|[^|]*|[^|]*|[^|]*|[^|]*$/d'` ]]; then
+    echo -e "\nThere is an error in config file\n"
     exit
   fi
 }
 
-check_configs () {
-  check_config "/^[^|]*|[^|]*|[^|]*|[^|]*$/d" $CFG_SINGLE
-  check_config "/^[^|]*|[^|]*|[^|]*$/d" $CFG_ROKS
-  check_config "/^[^|]*|[^|]*|[^|]*|[^|]*$/d" $CFG_SOMAFM
+check_log_dir_channel () {
+  DIR=$(get_log_dir "$(get_group "$CHANNEL")" "$(get_channel "$CHANNEL")")
+  [ -d $LOGDIR/$DIR ] || mkdir -p $LOGDIR/$DIR
 }
 
 check_log_dirs () {
-  [ -d ~/log/radio/soma.fm ] || mkdir -p ~/log/radio/soma.fm
-  [ -d ~/log/radio/Radio\ ROKS ] || mkdir -p ~/log/radio/Radio\ ROKS
-  for DIR in $(cat $CFG_SINGLE | awk -F '|' '{print $1}')
-  do
-    [ -d ~/log/radio/$DIR ] || mkdir -p ~/log/radio/$DIR
+  [ -d $LOGDIR ] || mkdir -p $LOGDIR
+  echo "$CFG" | sed -n "/^.*|{group}/!p" | while read CHANNEL ; do
+    check_log_dir_channel "$CHANNEL"
   done
 }
 
-print_single () {
-  cat $CFG_SINGLE  ''
+remove_old_logs () {
+  if [[ $1 =~ ^-?[0-9]+$ ]]; then
+    echo -e "removing log files older than $1 days\n"
+    find $LOGDIR -mtime +$1 -type f -delete
+  else
+    error
+  fi
 }
 
-help_single() {
+print_header () {
+  printf '%.s-' {1..32}
+  echo -e " $1 $2\n"
+}
+
+help_single () {
   echo "$CFG" | sed -n '/^{root}/p' | awk -F '|' '{print $2"      \t\t"$4}'
 }
 
-help_group() {
+help_group () {
   echo "$CFG" | sed -n "/^$1|{group}/p" | awk -F '|' '{print $1"      \t\t"$4}'
   echo "$CFG" | sed -n "/^$1|{group}/d;/^$1/p" | awk -F '|' '{print "\t"$2"      \t"$4}'
 }
 
-help_groups() {
-  for GRP in $(echo "$CFG_ROOT" | awk -F '|' '{print $1}' | uniq)
+help_groups () {
+  for GRP in $(echo "$CFG_GROUP" | awk -F '|' '{print $1}' | uniq)
   do
     help_group $GRP
   done
 }
 
 do_help () {
-  echo "Shell for radio"
-  echo "usage: radio [name] [channel]"
-  echo
-  echo "list of supported radios and channels:"
-  echo -e "radio\tchannel\t\tdescription"
-  echo
+  echo -e "Shell for radio\n\nusage:\tradio [cmd]\n\tradio [channel]\n\tradio [group] [channel]\n\nlist of commands:\n"
+  echo -e "\tconfig check\tcheck config file"
+  echo -e "\tconfig show\tshow detailed config"
+  echo -e "\thelp\t\tshow this help"
+  echo -e "\tlog del [days]\tremove log files older than [days] days\n\t\t\t(script auto removes log files older than 60 days)\n"
+  echo -e "list of supported radio groups and channels:\nradio\tchannel\t\tdescription\n"
   help_single
   help_groups
   echo -e "\t{empty}\t\trandom channel selection"
   echo -e "~\t\t\trandom radio and channel selection"
+  echo -e "\nterminal control keys:\n\n [+]\t\tvolume up\n [-]\t\tvolume down\n [s] or [ ]\tinterrupt/restart playback (i.e. 'pause')\n [q]\t\tquit\n"
+}
+
+print_config_channel () {
+  echo -e "\n\tgroup:\t"$(get_group "$1")
+  echo -e "\tchnl:\t"$(get_channel "$1")
+  echo -e "\tstream:\t"$(get_stream "$1")
+  echo -e "\tname:\t"$(get_name "$1")
+  echo -e "\ticon:\t"$(get_icon "$1")
+  echo -e "\tlogdir:\t"$(get_log_dir $(get_group "$1") $(get_channel "$1"))
+  echo -e "\tlog:\t"$(get_log_file_name $(get_group "$1") $(get_channel "$1"))"\n"
+}
+
+print_config_single () {
+  print_header "root" "start"
+  echo "$CFG_ROOT" | while read CHANNEL ; do
+    echo "$CHANNEL" | awk -F '|' '{print $2"      \t"$4}'
+    print_config_channel "$CHANNEL"
+  done
+  print_header "root" "end"
+}
+
+print_config_group () {
+  print_header "group" "start"
+  echo "$CFG" | sed -n "/^$1|{group}/p" | awk -F '|' '{print $1"      \t"$4}'
   echo
-  echo "terminal control keys:"
-  echo
-  echo -e " [+]\t\tvolume up"
-  echo -e " [-]\t\tvolume down"
-  echo -e " [s] or [ ]\tinterrupt/restart playback (i.e. 'pause')"
-  echo -e " [q]\t\tquit"
-  echo
+  echo "$CFG" | sed -n "/^$1|{group}/d;/^$1/p" | while read CHANNEL ; do
+    echo "$CHANNEL" | awk -F '|' '{print $2"      \t"$4}'
+    print_config_channel "$CHANNEL"
+  done
+  print_header "group" "end"
+}
+
+print_config_groups () {
+  for GRP in $(echo "$CFG_GROUP" | awk -F '|' '{print $1}' | uniq)
+  do
+    print_config_group $GRP
+  done
+}
+
+config_show () {
+  print_config_single
+  print_config_groups
 }
 
 error () {
-  echo "You made some mistake in program usage... let me briefly remind you:"
-  echo
-  help
+  echo -e "\nYou made some mistake in program usage... let me briefly remind you:\n"
+  do_help
+  exit
 }
 
 do_main () {
@@ -198,6 +275,30 @@ do_main () {
       help)
         do_help
         ;;
+      config)
+        case $2 in
+          check)
+            config_check
+            echo -e "\nok\n"
+            ;;
+          show)
+            config_show
+            ;;
+          *)
+            error
+            ;;
+        esac
+        ;;
+      log)
+        case $2 in
+          del)
+            remove_old_logs $3
+            ;;
+          *)
+            error
+            ;;
+        esac
+        ;;
       *)
         do_radio $1 $2
         ;;
@@ -205,6 +306,4 @@ do_main () {
   fi
 }
 
-check_configs
-check_log_dirs
-do_main $1 $2
+do_main $1 $2 $3
