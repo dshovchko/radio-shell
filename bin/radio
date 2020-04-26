@@ -157,11 +157,13 @@ print_header () {
 
 help_single () {
   echo "$CFG" | sed -n '/^{root}/p' | awk -F '|' '{print $2"      \t\t"$4}'
+  echo
 }
 
 help_group () {
   echo "$CFG" | sed -n "/^$1|{group}/p" | awk -F '|' '{print $1"      \t\t"$4}'
-  echo "$CFG" | sed -n "/^$1|{group}/d;/^$1/p" | awk -F '|' '{print "\t"$2"      \t"$4}'
+  echo "$CFG" | sed -n "/^$1|{group}/d;/^$1/p" | awk -F '|' '{if (length($2)<15) a="\t";if (length($2)<8) a="\t\t";print "\t"$2""a""$4}'
+  echo
 }
 
 help_groups () {
@@ -172,7 +174,7 @@ help_groups () {
 }
 
 do_help () {
-  echo -e "Shell for radio\n\nusage:\tradio [cmd]\n\tradio [channel]\n\tradio [group] [channel]\n\nlist of commands:\n"
+  echo -e "Shell for radio\n\nusage:\tradio [cmd]\n\tradio [channel]\n\tradio [group] [channel]\n\tradio ~\n\nlist of commands:\n"
   echo -e "\tconfig check\tcheck config file"
   echo -e "\tconfig show\tshow detailed config"
   echo -e "\thelp\t\tshow this help"
@@ -180,7 +182,6 @@ do_help () {
   echo -e "list of supported radio groups and channels:\nradio\tchannel\t\tdescription\n"
   help_single
   help_groups
-  echo -e "\t{empty}\t\trandom channel selection"
   echo -e "~\t\t\trandom radio and channel selection"
   echo -e "\nterminal control keys:\n\n [+]\t\tvolume up\n [-]\t\tvolume down\n [s] or [ ]\tinterrupt/restart playback (i.e. 'pause')\n [q]\t\tquit\n"
 }
