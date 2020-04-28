@@ -36,14 +36,18 @@ get_stream () {
     STREAM="http://ice${CHANNELN}.somafm.com/${CHANNEL}-${BITRATE}-mp3"
   fi
   echo "$STREAM"
-  }
+}
 
-get_name () {
+get_player () {
   echo "$1" | cut -d "|" -f 4
 }
 
-get_icon () {
+get_name () {
   echo "$1" | cut -d "|" -f 5
+}
+
+get_icon () {
+  echo "$1" | cut -d "|" -f 6
 }
 
 get_log_dir () {
@@ -119,14 +123,32 @@ do_radio () {
 
 config_check () {
   if [[ -n `echo "$CFG" | sed -n '/^$/='` ]]; then
-    echo -e "\nThere is an empty lines in config file\n"
+    echo -e "\nThere is an empty lines in config file!\n"
     exit
   fi
 
-  if [[ -n `echo "$CFG" | sed -e '/^[^|]*|[^|]*|[^|]*|[^|]*|[^|]*$/d'` ]]; then
-    echo -e "\nThere is an error in config file\n"
+  BAD=`echo "$CFG" | sed -e '/^[^|]*|[^|]*|[^|]*|[^|]*|[^|]*|[^|]*$/d'`
+  if [[ -n $BAD ]]; then
+    echo -e "\nThere is an error in config file!\nCheck this line(s):\n\n$BAD\n"
     exit
   fi
+  echo "$CFG" | sed -n "/^.*|{group}/!p" | while read CHANNEL ; do
+
+    PLAYER=$(get_player "$CHANNEL")
+    if [[ ! $PLAYER =~ ^(mpg123|mplayer)$ ]]; then
+      echo -e "\nA nonexistent player was specified\n"
+      print_config_channel "$CHANNEL"
+      exit 1
+    fi
+
+    ICON=$(get_icon "$CHANNEL")
+    if [ ! -f $ICONDIR/$ICON ]; then
+      echo -e "\nA nonexistent icon file was specified\n"
+      print_config_channel "$CHANNEL"
+      exit 1
+    fi
+  done
+  err=$?; [[ $err -ne 0 ]] && exit $err
 }
 
 check_log_dir_channel () {
@@ -190,6 +212,7 @@ print_config_channel () {
   echo -e "\n\tgroup:\t"$(get_group "$1")
   echo -e "\tchnl:\t"$(get_channel "$1")
   echo -e "\tstream:\t"$(get_stream "$1")
+  echo -e "\tplayer:\t"$(get_player "$1")
   echo -e "\tname:\t"$(get_name "$1")
   echo -e "\ticon:\t"$(get_icon "$1")
   echo -e "\tlogdir:\t"$(get_log_dir $(get_group "$1") $(get_channel "$1"))
@@ -231,7 +254,7 @@ config_show () {
 error () {
   echo -e "\nYou made some mistake in program usage... let me briefly remind you:\n"
   do_help
-  exit
+  exit 1
 }
 
 do_main () {
