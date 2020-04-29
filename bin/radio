@@ -12,10 +12,20 @@ CFG=`sed '/^[[:blank:]]*#/d;s/#.*//;/^$/d' $CFG_FILE`
 CFG_ROOT=`sed '/^[[:blank:]]*#/d;s/#.*//;/^$/d;/^{root}/!d' $CFG_FILE`
 CFG_GROUP=`sed '/^[[:blank:]]*#/d;s/#.*//;/^$/d;/^{root}/d' $CFG_FILE`
 
+play_mpg123 () {
+  mpg123 -C "$1" &> /dev/stdout | $BINDIR/_radio-logger-mpg123 "$LOGDIR/$2" "$3"
+}
+
+play_mplayer () {
+  mplayer "$1"
+  #mplayer "$1" &> /dev/stdout | $BINDIR/_radio-logger-mplayer "$LOGDIR/$2" "$3"
+}
+
 play () {
-  echo $1 > /tmp/streamurl
-  echo $2
-  mpg123 -C "$1" &> /dev/stdout | $BINDIR/_radio-logger "$LOGDIR/$3" "$4"
+  check_player $1
+  echo $2 > /tmp/streamurl
+  echo $3
+  play_$1 "$2" "$4" "$5"
 }
 
 get_group () {
@@ -72,10 +82,11 @@ play_channel () {
   RCNL=$(get_channel "$1")
   LOGFILENAME=$(get_log_file_name "$RGRP" "$RCNL")
   STREAM=$(get_stream "$1")
+  PLAYER=$(get_player "$1")
   NAME=$(get_name "$1")
   ICON=$(get_icon "$1")
 
-  play "$STREAM" "$NAME" "$LOGFILENAME" "$ICONDIR/$ICON"
+  play "$PLAYER" "$STREAM" "$NAME" "$LOGFILENAME" "$ICONDIR/$ICON"
 }
 
 do_before () {
@@ -149,6 +160,10 @@ config_check () {
     fi
   done
   err=$?; [[ $err -ne 0 ]] && exit $err
+}
+
+check_player() {
+  command -v $1 >/dev/null 2>&1 || { echo "$1 is required but it's not installed. Aborting."; exit 1; }
 }
 
 check_log_dir_channel () {
