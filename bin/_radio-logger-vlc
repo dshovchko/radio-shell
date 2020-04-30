@@ -1,29 +1,27 @@
 #!/bin/bash
 
-while true
+while read
 do
-  read -d ';'
-  if [[ ${REPLY} =~ "Exiting... (Quit)" ]]; then
+  if [[ ${REPLY} =~ "core libvlc debug: exiting" ]]; then
     # on getting
-    #Exiting... (Quit)
+    #[0000000001af2088] core libvlc debug: exiting
     echo > /tmp/streamurl; echo > /tmp/streamtitle; echo "exited..."
     break;
   fi
   if [ ! -z "$REPLY" ]; then
 
     if [[ -z $ICY_NAME ]]; then
-      ICY_NAME=$(echo "$REPLY" | grep Name | sed s/Name\ \ \ :\//g | sed s/\'$//g);
+      ICY_NAME=$(echo "$REPLY" | grep Icy-Name | sed -n -e 's/^.*Icy-Name: //p');
       if [[ -n $ICY_NAME ]]; then echo; echo $ICY_NAME; fi
     fi
     if [[ -z $ICY_URL ]]; then
-      ICY_URL=$(echo "$REPLY" | grep Website | sed s/Website:\//g | sed s/\'$//g);
+      ICY_URL=$(echo "$REPLY" | grep Meta-Info:\ icy-url: | sed -n -e 's/^.*icy-url: //p');
       if [[ -n $ICY_URL ]]; then echo $ICY_URL; echo; fi
     fi
 
-    TRACK=$(echo "$REPLY" | grep ICY\ Info | sed s/ICY\ Info:\ StreamTitle=\'//g | sed s/\'$//g);
+    TRACK=$(echo "$REPLY" | grep Icy-Title | sed -n -e 's/^.*Icy-Title=//p');
     if [[ -n $TRACK ]]; then
       (notify-send -i $2 "$TRACK" && TIM=`date +%H:%M` && DAT=`date +%Y%m%d` && echo $TRACK && echo $TRACK > /tmp/streamtitle && echo "$TIM $TRACK" >> "$1-$DAT.log")
     fi
-    sleep 1;
   fi
 done

@@ -1,6 +1,5 @@
 #!/bin/bash
 
-LOGF=$1
 while true
 do
   read -d ';'
@@ -13,17 +12,17 @@ do
   if [ ! -z "$REPLY" ]; then
 
     if [[ -z $ICY_NAME ]]; then
-      ICY_NAME=$(echo "$REPLY"| grep ICY-NAME|sed s/ICY-NAME:\//g|sed s/\'$//g);
+      ICY_NAME=$(echo "$REPLY" | grep ICY-NAME | sed s/ICY-NAME:\//g | sed s/\'$//g);
       if [[ -n $ICY_NAME ]]; then echo; echo $ICY_NAME; fi
     fi
     if [[ -z $ICY_URL ]]; then
-      ICY_URL=$(echo "$REPLY"| grep ICY-URL|sed s/ICY-URL:\//g|sed s/\'$//g);
+      ICY_URL=$(echo "$REPLY" | grep ICY-URL | sed s/ICY-URL:\//g | sed s/\'$//g);
       if [[ -n $ICY_URL ]]; then echo $ICY_URL; echo; fi
     fi
 
-    TRACK=$(echo "$REPLY"| grep ICY-META|sed s/ICY-META:\ StreamTitle=\'//g|sed s/\'$//g);
+    TRACK=$(echo "$REPLY" | grep ICY-META | sed s/ICY-META:\ StreamTitle=\'//g | sed s/\'$//g);
     if [[ -n $TRACK ]]; then
-      (notify-send -i $2 "$TRACK" && TIM=`date +%H:%M` && DAT=`date +%Y%m%d` && echo $TRACK && echo $TRACK > /tmp/streamtitle && echo "$TIM $TRACK" >> "$LOGF-$DAT.log")
+      (notify-send -i $2 "$TRACK" && TIM=`date +%H:%M` && DAT=`date +%Y%m%d` && echo $TRACK && echo $TRACK > /tmp/streamtitle && echo "$TIM $TRACK" >> "$1-$DAT.log")
     fi
     sleep 1;
   fi
