@@ -17,8 +17,11 @@ play_mpg123 () {
 }
 
 play_mplayer () {
-  mplayer "$1"
-  #mplayer "$1" &> /dev/stdout | $BINDIR/_radio-logger-mplayer "$LOGDIR/$2" "$3"
+  mplayer "$1" &> /dev/stdout | $BINDIR/_radio-logger-mplayer "$LOGDIR/$2" "$3"
+}
+
+play_vlc () {
+  cvlc -vvvv --no-color --global-key-quit q --global-key-play-pause s --global-key-vol-up + --global-key-vol-down - "$1" &> /dev/stdout | $BINDIR/_radio-logger-vlc "$LOGDIR/$2" "$3"
 }
 
 play () {
@@ -146,7 +149,7 @@ config_check () {
   echo "$CFG" | sed -n "/^.*|{group}/!p" | while read CHANNEL ; do
 
     PLAYER=$(get_player "$CHANNEL")
-    if [[ ! $PLAYER =~ ^(mpg123|mplayer)$ ]]; then
+    if [[ ! $PLAYER =~ ^(mpg123|mplayer|vlc)$ ]]; then
       echo -e "\nA nonexistent player was specified\n"
       print_config_channel "$CHANNEL"
       exit 1
@@ -162,8 +165,25 @@ config_check () {
   err=$?; [[ $err -ne 0 ]] && exit $err
 }
 
-check_player() {
+check_command () {
   command -v $1 >/dev/null 2>&1 || { echo "$1 is required but it's not installed. Aborting."; exit 1; }
+}
+
+check_player() {
+  case $1 in
+    mpg123)
+      check_command mpg123
+      ;;
+    mplayer)
+      check_command mplayer
+      ;;
+    vlc)
+      check_command cvlc
+      ;;
+    *)
+      echo "unknown player $1"; exit 1
+      ;;
+  esac
 }
 
 check_log_dir_channel () {
