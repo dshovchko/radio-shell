@@ -1,13 +1,24 @@
 #!/bin/bash
 
+trap ctrl_c INT
+
+ctrl_c () {
+  echo "...trapped CTRL-C"
+  do_exit
+}
+
+do_exit() {
+  echo > /tmp/streamurl; echo > /tmp/streamtitle; echo "exited..."
+  exit 1
+}
+
 while true
 do
   read -d ';'
   if [[ ${REPLY} =~ " finished." ]]; then
     # on getting
     #[0:02] Decoding of lush-128.mp3 finished.
-    echo > /tmp/streamurl; echo > /tmp/streamtitle; echo "exited..."
-    break;
+    do_exit
   fi
   if [ ! -z "$REPLY" ]; then
 

@@ -1,12 +1,23 @@
 #!/bin/bash
 
+trap ctrl_c INT
+
+ctrl_c () {
+  echo "...trapped CTRL-C"
+  do_exit
+}
+
+do_exit() {
+  echo > /tmp/streamurl; echo > /tmp/streamtitle; echo "exited..."
+  exit 1
+}
+
 while read
 do
   if [[ ${REPLY} =~ "core libvlc debug: exiting" ]]; then
     # on getting
     #[0000000001af2088] core libvlc debug: exiting
-    echo > /tmp/streamurl; echo > /tmp/streamtitle; echo "exited..."
-    break;
+    do_exit
   fi
   if [ ! -z "$REPLY" ]; then
 

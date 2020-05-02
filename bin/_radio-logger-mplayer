@@ -1,13 +1,24 @@
 #!/bin/bash
 
+trap ctrl_c INT
+
+ctrl_c () {
+  echo "...trapped CTRL-C"
+  do_exit
+}
+
+do_exit() {
+  echo > /tmp/streamurl; echo > /tmp/streamtitle; echo "exited..."
+  exit 1
+}
+
 while true
 do
   read -d ';'
   if [[ ${REPLY} =~ "Exiting... (Quit)" ]]; then
     # on getting
     #Exiting... (Quit)
-    echo > /tmp/streamurl; echo > /tmp/streamtitle; echo "exited..."
-    break;
+    do_exit
   fi
   if [ ! -z "$REPLY" ]; then
 
