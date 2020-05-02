@@ -159,6 +159,7 @@ config_check () {
       print_config_channel "$CHANNEL"
       exit 1
     fi
+    check_player $(get_player "$CHANNEL")
 
     ICON=$(get_icon "$CHANNEL")
     if [ ! -f $ICONDIR/$ICON ]; then
@@ -171,7 +172,12 @@ config_check () {
 }
 
 check_command () {
-  command -v $1 >/dev/null 2>&1 || { echo "$1 is required but it's not installed. Aborting."; exit 1; }
+  VAR="CHECKED_$1"
+  eval VAL="\$$VAR"
+  if [[ -z $VAL ]]; then
+    command -v $1 >/dev/null 2>&1 || { echo "$1 is required but it's not installed. Aborting."; exit 1; }
+    eval "$VAR=1"
+  fi
 }
 
 check_player() {
