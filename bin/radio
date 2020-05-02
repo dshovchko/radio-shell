@@ -110,11 +110,19 @@ do_random () {
 }
 
 do_radio_group_channel () {
-  CHANNEL=`echo "$CFG" | sed -n "/^$1|$2|/p"`
-  if [[ -z $CHANNEL ]]; then
-    error
-  else
+  if [ $2 = ~ ]; then
+    # play random channel
+    echo "$1 random..."
+    CHANNEL=`echo "$CFG" | sed -n "/^$1|{group}/d;/^$1/p" | shuf -n 1`
     play_channel "$CHANNEL"
+  else
+    # play specified channel
+    CHANNEL=`echo "$CFG" | sed -n "/^$1|$2|/p"`
+    if [[ -z $CHANNEL ]]; then
+      error
+    else
+      play_channel "$CHANNEL"
+    fi
   fi
 }
 
@@ -227,13 +235,13 @@ print_header () {
 }
 
 help_single () {
-  echo "$CFG" | sed -n '/^{root}/p' | awk -F '|' '{print $2"      \t\t"$4}'
+  echo "$CFG" | sed -n '/^{root}/p' | awk -F '|' '{print $2"      \t\t"$5}'
   echo
 }
 
 help_group () {
-  echo "$CFG" | sed -n "/^$1|{group}/p" | awk -F '|' '{print $1"      \t\t"$4}'
-  echo "$CFG" | sed -n "/^$1|{group}/d;/^$1/p" | awk -F '|' '{if (length($2)<15) a="\t";if (length($2)<8) a="\t\t";print "\t"$2""a""$4}'
+  echo "$CFG" | sed -n "/^$1|{group}/p" | awk -F '|' '{print $1"      \t\t"$5}'
+  echo "$CFG" | sed -n "/^$1|{group}/d;/^$1/p" | awk -F '|' '{if (length($2)<15) a="\t";if (length($2)<8) a="\t\t";print "\t"$2""a""$5}'
   echo
 }
 
@@ -245,7 +253,7 @@ help_groups () {
 }
 
 do_help () {
-  echo -e "Shell for radio\n\nusage:\tradio [cmd]\n\tradio [channel]\n\tradio [group] [channel]\n\tradio ~\n\nlist of commands:\n"
+  echo -e "Shell for radio\n\nusage:\tradio [cmd]\n\tradio [channel]\n\tradio [group] [channel]\n\tradio ~\n\tradio [group] ~\n\nlist of commands:\n"
   echo -e "\tconfig check\tcheck config file"
   echo -e "\tconfig show\tshow detailed config"
   echo -e "\thelp\t\tshow this help"
@@ -253,8 +261,7 @@ do_help () {
   echo -e "list of supported radio groups and channels:\nradio\tchannel\t\tdescription\n"
   help_single
   help_groups
-  echo -e "~\t\t\trandom radio and channel selection"
-  echo -e "\nterminal control keys:\n\n [+]\t\tvolume up\n [-]\t\tvolume down\n [s] or [ ]\tinterrupt/restart playback (i.e. 'pause')\n [q]\t\tquit\n"
+  echo -e "~\t\t\trandom radio and channel selection\n\t\t\t(among all or the specified group)\n"
 }
 
 print_config_channel () {
