@@ -154,7 +154,7 @@ config_check () {
     exit
   fi
 
-  BAD=`echo "$CFG" | sed -e '/^[^|]*|[^|]*|[^|]*|[^|]*|[^|]*|[^|]*$/d'`
+  BAD=`echo "$CFG" | sed -e '/^[^ |]*|[^ |]*|[^|]*|[^|]*|[^|]*|[^|]*$/d'`
   if [[ -n $BAD ]]; then
     echo -e "\nThere is an error in config file!\nCheck this line(s):\n\n$BAD\n"
     exit
