@@ -51,7 +51,7 @@ Its structure is simple, six fields separated by symbol `|`. Like that:
 ```
 
 - `group` - name of group. May contain an arbitrary string without spaces or the keyword `{root}`. `{root}` means that this row not included in a group. Any other value means that row included in a group named as value.
-- `short name` - short name of radio station. Used to choose radio stations.
+- `short name` - short name of radio station. Used to choose radio stations. Short name can contain keywords `{group}` and `{empty}`. `{group}` means that this row is a group description. `{empty}` means that this radio can be played only by specifying a group.
 - `stream` - URL of stream. May contain URL of stream or special config string for soma.fm radio station, like this `{somafm!defcon!256}`. URL of soma.fm streams looks like this `http://ice3.somafm.com/defcon-256-mp3`. It is built according to the rules in which we describe the name of the radio station and bitrate. `{}` - is a container that contains three values separated by a symbol `!`:
   - `somafm` - constant
   - `defcon` - name of soma.fm radio
@@ -77,6 +77,8 @@ My usual config. This is what I am listening to. A few multi-genre radio station
   
 Radio station settings in the default configuration file as of May 3, 2020.
 
+Probably, radio-shell with the default config will not work for you, because the system does not have the required audio player. Just comment out the problematic stations in the configuration file.
+
 ## Test config
 
 `radio-shell/etc/radio.test-players.cfg`
@@ -87,7 +89,8 @@ This file contains settings for radio stations that cover all supported players 
 
 ### Which player and stream should you choose?
 
-Choose from your preferences for sound quality, memory consumption and bandwidth of your Internet channel.
+Choose from your preferences for sound quality, memory consumption and bandwidth of your Internet channel. And of course, the required player must be installed on your system.
+
 | Player        | Codec         | Memory  |
 | :-------------: |-------------| :-----:|
 | mpg123      | mp3 | < 1mb |
@@ -171,6 +174,10 @@ For a random selection among all radio stations, run
 ```
 radio ~
 ```
+
+## Logs
+
+You will find the program logs in the catalog `~/log/radio/`.
 
 ---
 
