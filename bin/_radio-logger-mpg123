@@ -1,0 +1,40 @@
+#!/bin/bash
+
+trap ctrl_c INT
+
+ctrl_c () {
+  echo "...trapped CTRL-C"
+  do_exit
+}
+
+do_exit() {
+  echo > /tmp/streamurl; echo > /tmp/streamtitle; echo "exited..."
+  exit 1
+}
+
+while true
+do
+  read -d ';'
+  if [[ ${REPLY} =~ " finished." ]]; then
+    # on getting
+    #[0:02] Decoding of lush-128.mp3 finished.
+    do_exit
+  fi
+  if [ ! -z "$REPLY" ]; then
+
+    if [[ -z $ICY_NAME ]]; then
+      ICY_NAME=$(echo "$REPLY" | grep ICY-NAME | sed s/ICY-NAME:\//g | sed s/\'$//g);
+      if [[ -n $ICY_NAME ]]; then echo; echo $ICY_NAME; fi
+    fi
+    if [[ -z $ICY_URL ]]; then
+      ICY_URL=$(echo "$REPLY" | grep ICY-URL | sed s/ICY-URL:\//g | sed s/\'$//g);
+      if [[ -n $ICY_URL ]]; then echo $ICY_URL; echo; fi
+    fi
+
+    TRACK=$(echo "$REPLY" | grep ICY-META | sed s/ICY-META:\ StreamTitle=\'//g | sed s/\'$//g);
+    if [[ -n $TRACK ]]; then
+      (notify-send -i $2 "$TRACK" && TIM=`date +%H:%M` && DAT=`date +%Y%m%d` && echo $TRACK && echo $TRACK > /tmp/streamtitle && echo "$TIM $TRACK" >> "$1-$DAT.log")
+    fi
+    sleep 1;
+  fi
+done
