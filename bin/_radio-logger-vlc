@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 trap ctrl_c INT
 
@@ -12,26 +12,21 @@ do_exit() {
   exit 1
 }
 
-while read
+while read REPLY
 do
-  if [[ ${REPLY} =~ "core libvlc debug: exiting" ]]; then
-    # on getting
-    #[0000000001af2088] core libvlc debug: exiting
-    do_exit
-  fi
   if [ ! -z "$REPLY" ]; then
 
-    if [[ -z $ICY_NAME ]]; then
+    if [ -z "$ICY_NAME" ]; then
       ICY_NAME=$(echo "$REPLY" | grep Icy-Name | sed -n -e 's/^.*Icy-Name: //p');
-      if [[ -n $ICY_NAME ]]; then echo; echo $ICY_NAME; fi
+      if [ -n "$ICY_NAME" ]; then echo; echo $ICY_NAME; fi
     fi
-    if [[ -z $ICY_URL ]]; then
+    if [ -z "$ICY_URL" ]; then
       ICY_URL=$(echo "$REPLY" | grep Meta-Info:\ icy-url: | sed -n -e 's/^.*icy-url: //p');
-      if [[ -n $ICY_URL ]]; then echo $ICY_URL; echo; fi
+      if [ -n "$ICY_URL" ]; then echo $ICY_URL; echo; fi
     fi
 
     TRACK=$(echo "$REPLY" | grep Icy-Title | sed -n -e 's/^.*Icy-Title=//p');
-    if [[ -n $TRACK ]]; then
+    if [ -n "$TRACK" ]; then
       (notify-send -i $2 "$TRACK" && TIM=`date +%H:%M` && DAT=`date +%Y%m%d` && echo $TRACK && echo $TRACK > /tmp/streamtitle && echo "$TIM $TRACK" >> "$1-$DAT.log")
     fi
   fi

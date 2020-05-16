@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 trap ctrl_c INT
 
@@ -12,24 +12,24 @@ do_exit() {
   exit 1
 }
 
-while read
+while read REPLY
 do
   if [ ! -z "$REPLY" ]; then
 
-    if [[ -z $ICY_NAME ]]; then
+    if [ -z "$ICY_NAME" ]; then
       ICY_NAME=$(echo "$REPLY" | grep Playing: | sed -n -e 's/^.*Playing: //p');
-      if [[ -n $ICY_NAME ]]; then echo; echo $ICY_NAME; echo; fi
+      if [ -n "$ICY_NAME" ]; then echo; echo $ICY_NAME; echo; fi
     fi
 
-    if [[ -z $TITLE ]]; then
+    if [ -z "$TITLE" ]; then
       TITLE=$(echo "$REPLY" | grep Title: | sed -n -e 's/^.*Title: //p');
     fi
 
-    if [[ -z $ARTIST ]]; then
+    if [ -z "$ARTIST" ]; then
       ARTIST=$(echo "$REPLY" | grep Artist: | sed -n -e 's/^.*Artist: //p');
     fi
 
-    if [[ -n $ARTIST && -n $TITLE ]]; then
+    if [ -n "$ARTIST" -a -n "$TITLE" ]; then
       TRACK="$ARTIST - $TITLE"
       (notify-send -i $2 "$TRACK" && TIM=`date +%H:%M` && DAT=`date +%Y%m%d` && echo $TRACK && echo $TRACK > /tmp/streamtitle && echo "$TIM $TRACK" >> "$1-$DAT.log")
       unset ARTIST
